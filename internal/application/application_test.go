@@ -17,7 +17,7 @@ func TestRequestHandlerSuccessCase(t *testing.T) {
 	expression := "1+1"
 	reqBody := &application.ExpressionRequest{Expression: expression}
 	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest("POST", "/", bytes.NewBuffer(body))
+	req := httptest.NewRequest("POST", "/api/v1/calculate", bytes.NewBuffer(body))
 	w := httptest.NewRecorder()
 	application.CalculatorHandler(w, req)
 	res := w.Result()
@@ -48,7 +48,7 @@ func TestRequestHandlerBadRequestCase(t *testing.T) {
 		t.Run(expression, func(t *testing.T) {
 			reqBody := &application.ExpressionRequest{Expression: expression}
 			body, _ := json.Marshal(reqBody)
-			req := httptest.NewRequest("POST", "/", bytes.NewBuffer(body))
+			req := httptest.NewRequest("POST", "/api/v1/calculate", bytes.NewBuffer(body))
 			w := httptest.NewRecorder()
 
 			application.CalculatorHandler(w, req)

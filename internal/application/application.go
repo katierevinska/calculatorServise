@@ -16,7 +16,7 @@ func New() *Application {
 }
 
 func (a *Application) RunServer() {
-	http.HandleFunc("/", CalculatorHandler)
+	http.HandleFunc("/api/v1/calculate", CalculatorHandler)
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatalf("Could not start server: %s\n", err)
