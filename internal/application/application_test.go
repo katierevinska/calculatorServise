@@ -3,6 +3,7 @@ package application_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,7 @@ func TestRequestHandlerSuccessCase(t *testing.T) {
 		t.Errorf("wrong status code")
 	}
 	expected, _ := rpn.Calc(expression)
-	resp := application.SuccessResponse{Result: expected}
+	resp := application.SuccessResponse{Result: fmt.Sprintf("%f", expected)}
 	expectedData, _ := json.Marshal(resp)
 	if strings.TrimSpace(string(data)) != strings.TrimSpace(string(expectedData)) {
 		t.Errorf("wrong result by server: got %v, want %v", string(data), string(expectedData))

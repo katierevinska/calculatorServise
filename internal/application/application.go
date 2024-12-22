@@ -2,6 +2,7 @@ package application
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -27,7 +28,7 @@ type ExpressionRequest struct {
 	Expression string `json:"expression"`
 }
 type SuccessResponse struct {
-	Result float64 `json:"result"`
+	Result string `json:"result"`
 }
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -49,7 +50,7 @@ func CalculatorHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	res := new(SuccessResponse)
-	res.Result = resp
+	res.Result = fmt.Sprintf("%f", resp)
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
