@@ -9,14 +9,14 @@ import (
 	"github.com/katierevinska/rpn/pkg/rpn"
 )
 
-type Application struct {
+type OrchestratorApp struct {
 }
 
-func New() *Application {
-	return &Application{}
+func New() *OrchestratorApp {
+	return &OrchestratorApp{}
 }
 
-func (a *Application) RunServer() {
+func (a *OrchestratorApp) RunServer() {
 	http.HandleFunc("/api/v1/calculate", CalculatorHandler)
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
