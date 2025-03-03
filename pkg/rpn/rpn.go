@@ -2,12 +2,15 @@ package rpn
 
 import (
 	"errors"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/katierevinska/calculatorService/internal"
 )
 
-func Calc(expression string) (float64, error) {
-	var nums []float64
+func Calc(expression string) (string, error) {
+	var nums []string
 	var ops []rune
 	var currNumStr strings.Builder
 
@@ -17,11 +20,7 @@ func Calc(expression string) (float64, error) {
 			currNumStr.WriteRune(char)
 		} else {
 			if currNumStr.Len() > 0 {
-				num, err := strconv.ParseFloat(currNumStr.String(), 64)
-				if err != nil {
-					return 0, err
-				}
-				nums = append(nums, num)
+				nums = append(nums, currNumStr.String())
 				currNumStr.Reset()
 			}
 			if char == '(' {
@@ -29,57 +28,53 @@ func Calc(expression string) (float64, error) {
 			} else if char == ')' {
 				for len(ops) > 0 && ops[len(ops)-1] != '(' {
 					if len(nums) < 2 {
-						return 0, errors.New("invalid expression: unmatched parentheses")
+						return "", errors.New("invalid expression: unmatched parentheses")
 					}
 					nums, ops, err = applyOperation(nums, ops)
 					if err != nil {
-						return 0, errors.New("invalid expression")
+						return "", errors.New("invalid expression")
 					}
 				}
 				if len(ops) == 0 {
-					return 0, errors.New("invalid expression: unmatched parentheses")
+					return "", errors.New("invalid expression: unmatched parentheses")
 				}
 				ops = ops[:len(ops)-1]
 			} else if isOperation(char) {
 				for len(ops) > 0 && precedence(ops[len(ops)-1]) >= precedence(char) {
 					if len(nums) < 2 {
-						return 0, errors.New("invalid expression")
+						return "", errors.New("invalid expression")
 					}
 					nums, ops, err = applyOperation(nums, ops)
 					if err != nil {
-						return 0, errors.New("invalid expression")
+						return "", errors.New("invalid expression")
 					}
 				}
 				ops = append(ops, char)
 			} else {
-				return 0, errors.New("invalid expression: unknown simbol")
+				return "", errors.New("invalid expression: unknown simbol")
 			}
 		}
 	}
 
 	if currNumStr.Len() > 0 {
-		num, err := strconv.ParseFloat(currNumStr.String(), 64)
-		if err != nil {
-			return 0, err
-		}
-		nums = append(nums, num)
+		nums = append(nums, currNumStr.String())
 	}
 
 	for len(ops) > 0 {
 		if ops[len(ops)-1] == '(' {
-			return 0, errors.New("invalid expression: unmatched parentheses")
+			return "", errors.New("invalid expression: unmatched parentheses")
 		}
 		if len(nums) < 2 && len(ops) > 0 {
-			return 0, errors.New("incorrect")
+			return "", errors.New("incorrect")
 		}
 		nums, ops, err = applyOperation(nums, ops)
 		if err != nil {
-			return 0, errors.New("invalid expression")
+			return "", errors.New("invalid expression")
 		}
 	}
 
 	if len(nums) != 1 {
-		return 0, errors.New("invalid expression")
+		return "", errors.New("invalid expression")
 	}
 	return nums[0], nil
 }
@@ -101,7 +96,7 @@ func precedence(op rune) int {
 	}
 	return 0
 }
-func applyOperation(nums []float64, ops []rune) ([]float64, []rune, error) {
+func applyOperation(nums []string, ops []rune) ([]string, []rune, error) {
 	if len(nums) < 2 || len(ops) == 0 {
 		return nums, ops, nil
 	}
@@ -113,21 +108,27 @@ func applyOperation(nums []float64, ops []rune) ([]float64, []rune, error) {
 	nums = nums[:len(nums)-2]
 	ops = ops[:len(ops)-1]
 
-	var result float64
+	var opTime string
 
 	switch operator {
 	case '+':
-		result = a + b
+		opTime = os.Getenv("TIME_ADDITION_MS")
 	case '-':
-		result = a - b
+		opTime = os.Getenv("TIME_SUBTRACTION_MS")
 	case '*':
-		result = a * b
+		opTime = os.Getenv("TIME_MULTIPLICATIONS_MS")
 	case '/':
-		if b == 0 {
+		bNum, _ := strconv.ParseFloat(b, 64)
+		if 0.0 == bNum {
 			return nums, ops, errors.New("invalid expression: devision by 0")
 		}
-		result = a / b
+		opTime = os.Getenv("TIME_DIVISIONS_MS")
 	}
+	store := &internal.TaskStore{}
+	idResult := "id" + strconv.Itoa(int(store.GetCounter()))
 
-	return append(nums, result), ops, nil
+	task := internal.Task{Id: idResult, Arg1: a, Arg2: b, Operation: string(operator), Operation_time: opTime}
+
+	store.AddTask(task)
+	return append(nums, idResult), ops, nil
 }
