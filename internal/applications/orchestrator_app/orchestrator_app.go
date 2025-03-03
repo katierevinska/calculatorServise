@@ -10,18 +10,25 @@ import (
 )
 
 type OrchestratorApp struct {
+	expressionStore *internal.ExpressionStore
+	taskStore       *internal.TaskStore
+	taskResStore    *internal.TaskResultStore
 }
 
 func New() *OrchestratorApp {
-	return &OrchestratorApp{}
+	return &OrchestratorApp{
+		expressionStore: &internal.ExpressionStore{},
+		taskStore:       &internal.TaskStore{},
+		taskResStore:    &internal.TaskResultStore{},
+	}
 }
 
 func (a *OrchestratorApp) RunServer() {
-	http.HandleFunc("/api/v1/calculate", CalculatorHandler)
-	http.HandleFunc("/api/v1/expressions", GetExpressionsHandler)
-	http.HandleFunc("/api/v1/expressions/:id", GetExpressionByIdHandler)
-	http.HandleFunc("/internal/task", GetInternalTaskHandler)
-	http.HandleFunc("/internal/task", InternalTasResultHandler)
+	http.HandleFunc("/api/v1/calculate", a.CalculatorHandler)
+	http.HandleFunc("/api/v1/expressions", a.GetExpressionsHandler)
+	http.HandleFunc("/api/v1/expressions/", a.GetExpressionByIdHandler)
+	http.HandleFunc("/internal/task/new", a.GetInternalTaskHandler)
+	http.HandleFunc("/internal/task", a.InternalTasResultHandler)
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatalf("Could not start server: %s\n", err)
@@ -38,10 +45,9 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
-func GetExpressionByIdHandler(w http.ResponseWriter, r *http.Request) {
+func (app *OrchestratorApp) GetExpressionByIdHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.URL.Path[len("/api/v1/expressions/"):]
-	store := &internal.ExpressionStore{}
-	expression, exists := store.GetExpression(idStr)
+	expression, exists := app.expressionStore.GetExpression(idStr)
 	if !exists {
 		http.Error(w, "Expression not found", http.StatusNotFound)
 		return
@@ -51,40 +57,40 @@ func GetExpressionByIdHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(expression)
 }
 
-func GetExpressionsHandler(w http.ResponseWriter, r *http.Request) {
+func (app *OrchestratorApp) GetExpressionsHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func InternalTasResultHandler(w http.ResponseWriter, r *http.Request) {
+func (app *OrchestratorApp) InternalTasResultHandler(w http.ResponseWriter, r *http.Request) {
 	resultData := internal.TaskResult{}
 
 	if err := json.NewDecoder(r.Body).Decode(&resultData); err != nil {
 		http.Error(w, "Invalid input", http.StatusUnprocessableEntity)
 		return
 	}
-	store := &internal.TaskResultStore{}
-	store.AddTaskRes(resultData)
+	app.taskResStore.AddTaskRes(resultData)
 }
 
-func GetInternalTaskHandler(w http.ResponseWriter, r *http.Request) {
-	taskStore := &internal.TaskStore{}
-	taskResStore := &internal.TaskResultStore{}
+func (app *OrchestratorApp) GetInternalTaskHandler(w http.ResponseWriter, r *http.Request) {
 
-	task := taskStore.GetFirstTask()
+	task, exists := app.taskStore.GetFirstTask()
 
-	if value, exists := taskResStore.GetTaskRes(task.Arg1); exists {
-		task.Arg1 = value.Result
+	if exists {
+		if value, exists := app.taskResStore.GetTaskRes(task.Arg1); exists {
+			task.Arg1 = value.Result
+		}
+		if value, exists := app.taskResStore.GetTaskRes(task.Arg2); exists {
+			task.Arg2 = value.Result
+		}
+
+		response := map[string]internal.Task{"task": task}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
 	}
-	if value, exists := taskResStore.GetTaskRes(task.Arg2); exists {
-		task.Arg2 = value.Result
-	}
-
-	response := map[string]internal.Task{"task": task}
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(response)
+	w.WriteHeader(http.StatusNotFound)
 }
 
-func CalculatorHandler(w http.ResponseWriter, r *http.Request) {
+func (app *OrchestratorApp) CalculatorHandler(w http.ResponseWriter, r *http.Request) {
 	requestExrp := new(ExpressionRequest)
 	defer r.Body.Close()
 	err := json.NewDecoder(r.Body).Decode(&requestExrp)

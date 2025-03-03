@@ -76,12 +76,15 @@ func (store *TaskStore) GetTasks() []Task {
 	defer store.mu.Unlock()
 	return store.tasks
 }
-func (store *TaskStore) GetFirstTask() Task {
+func (store *TaskStore) GetFirstTask() (Task, bool) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
+	if len(store.tasks) == 0 {
+		return Task{}, false
+	}
 	task := store.tasks[0]
 	store.tasks = store.tasks[1:]
-	return task
+	return task, true
 }
 func (store *TaskStore) ToJSON() (string, error) {
 	store.mu.Lock()

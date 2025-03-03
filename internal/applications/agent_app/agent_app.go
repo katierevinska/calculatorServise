@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -25,6 +26,7 @@ func worker(id int, tasks <-chan internal.Task, results chan<- internal.TaskResu
 	//только должны быть не числа а инстансы
 	//и посчитав в канал результатов
 	for t := range tasks {
+		fmt.Println(id)
 		opTime, _ := strconv.ParseInt(t.Operation_time, 10, 64)
 		time.Sleep(time.Duration(opTime))
 		resultValue := calculate(t)
@@ -72,6 +74,8 @@ func (a *AgentApp) RunServer() {
 		task := fetchTask()
 		if task != nil {
 			tasks <- *task
+		} else {
+			time.Sleep(time.Second * 20)
 		}
 	}
 }
@@ -82,7 +86,7 @@ func sendResult(result internal.TaskResult) {
 		log.Printf("Ошибка при маршализации результата: %v", err)
 		return
 	}
-	resp, err := http.Post("/internal/task", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post("http://localhost:8080/internal/task", "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Printf("Ошибка при отправке результата: %v", err)
 		return
@@ -91,7 +95,7 @@ func sendResult(result internal.TaskResult) {
 }
 
 func fetchTask() *internal.Task {
-	resp, err := http.Get("/internal/task")
+	resp, err := http.Get("http://localhost:8080/internal/task/new")
 	if err != nil {
 		log.Printf("Ошибка при получении задачи: %v", err)
 		time.Sleep(5 * time.Second) // Подождать перед новой попыткой
@@ -101,6 +105,7 @@ func fetchTask() *internal.Task {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Ошибка: статус ответа %s", resp.Status)
+		time.Sleep(20 * time.Second) // Подождать перед новой попыткой
 		return nil
 	}
 
