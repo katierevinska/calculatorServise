@@ -1,3 +1,3 @@
-module github.com/katierevinska/rpn
+module github.com/katierevinska/calculatorService
 
 go 1.23.2

@@ -1,9 +1,22 @@
-package application
+package internal
 
 import (
 	"encoding/json"
 	"sync"
 )
+
+type Task struct {
+	Id             string `json:"id"`             //идентификатор задачи,
+	Arg1           string `json:"arg1"`           //имя первого аргумента,
+	Arg2           string `json:"arg2"`           //имя второго аргумента,
+	Operation      string `json:"operation"`      //операция,
+	Operation_time string `json:"operation_time"` //время выполнения операции
+}
+
+type TaskResult struct {
+	Id     string `json:"id"`
+	Result string `json:"result"`
+}
 
 type Expression struct {
 	ID     string `json:"id"`

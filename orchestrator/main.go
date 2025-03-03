@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	orchestratorApp "github.com/katierevinska/rpn/internal/applications/orchestrator_app"
+	orchestratorApp "github.com/katierevinska/calculatorService/internal/applications/orchestrator_app"
 )
 
 func main() { //two in two folders

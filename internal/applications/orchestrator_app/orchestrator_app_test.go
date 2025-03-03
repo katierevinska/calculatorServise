@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	orchestratorApp "github.com/katierevinska/rpn/internal/applications/orchestrator_app"
-	"github.com/katierevinska/rpn/pkg/rpn"
+	orchestratorApp "github.com/katierevinska/calculatorService/internal/applications/orchestrator_app"
+	"github.com/katierevinska/calculatorService/pkg/rpn"
 )
 
 func TestRequestHandlerSuccessCase(t *testing.T) {

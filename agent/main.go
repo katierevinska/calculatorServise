@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	AgentApp "github.com/katierevinska/rpn/internal/applications/agent_app"
+	AgentApp "github.com/katierevinska/calculatorService/internal/applications/agent_app"
 )
 
 func main() {
