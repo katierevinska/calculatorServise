@@ -6,7 +6,7 @@ import (
 	orchestratorApp "github.com/katierevinska/calculatorService/internal/applications/orchestrator_app"
 )
 
-func main() { //two in two folders
+func main() {
 	SetEnvVariables()
 	app := orchestratorApp.New()
 	app.RunServer()

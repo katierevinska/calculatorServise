@@ -13,5 +13,5 @@ func main() {
 }
 
 func SetEnvVariables() {
-	os.Setenv("COMPUTING_POWER", "200")
+	os.Setenv("COMPUTING_POWER", "20")
 }

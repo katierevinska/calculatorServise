@@ -14,28 +14,29 @@ import (
 )
 
 type AgentApp struct {
+	OrchestratorTaskURL   string
+	OrchestratorResultURL string
 }
 
 func New() *AgentApp {
-	return &AgentApp{}
+	return &AgentApp{
+		OrchestratorTaskURL:   "http://localhost:8080/internal/task/new",
+		OrchestratorResultURL: "http://localhost:8080/internal/task",
+	}
 }
 
 func worker(id int, tasks <-chan internal.Task, results chan<- internal.TaskResult) {
-	//пусть агент добавляет в jobs,
-	//тогда тут ниже будут перебираться задачи оттуда
-	//только должны быть не числа а инстансы
-	//и посчитав в канал результатов
 	for t := range tasks {
 		fmt.Println(id)
 		opTime, _ := strconv.ParseInt(t.Operation_time, 10, 64)
 		time.Sleep(time.Duration(opTime))
-		resultValue := calculate(t)
+		resultValue := Calculate(t)
 		log.Println("calculate a value of task and result is " + resultValue)
 		results <- internal.TaskResult{Id: t.Id, Result: resultValue}
 	}
 }
 
-func calculate(t internal.Task) string {
+func Calculate(t internal.Task) string {
 	var result float64
 	a, errA := strconv.ParseFloat(t.Arg1, 64)
 	b, errB := strconv.ParseFloat(t.Arg2, 64)
@@ -67,13 +68,11 @@ func (a *AgentApp) RunServer() {
 	go func() {
 		for result := range results {
 			log.Println("try to send to orchestrator " + result.Result)
-			sendResult(result)
+			a.sendResult(result)
 		}
 	}()
-	//здесь постоянно опрашивает оркестратора есть ли работа
-	//и добавляем в канал полученные задачи
 	for {
-		task := fetchTask()
+		task := a.fetchTask()
 		if task != nil {
 			tasks <- *task
 		} else {
@@ -82,14 +81,14 @@ func (a *AgentApp) RunServer() {
 	}
 }
 
-func sendResult(result internal.TaskResult) {
+func (a *AgentApp) sendResult(result internal.TaskResult) {
 	log.Println("want to send to orchestrator " + result.Id + " " + result.Result)
 	jsonData, err := json.Marshal(result)
 	if err != nil {
 		log.Printf("Ошибка при маршализации результата: %v", err)
 		return
 	}
-	resp, err := http.Post("http://localhost:8080/internal/task", "application/json", bytes.NewBuffer(jsonData))
+	resp, err := http.Post(a.OrchestratorResultURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Printf("Ошибка при отправке результата: %v", err)
 		return
@@ -97,18 +96,18 @@ func sendResult(result internal.TaskResult) {
 	resp.Body.Close()
 }
 
-func fetchTask() *internal.Task {
-	resp, err := http.Get("http://localhost:8080/internal/task/new")
+func (a *AgentApp) fetchTask() *internal.Task {
+	resp, err := http.Get(a.OrchestratorTaskURL)
 	if err != nil {
 		log.Printf("Ошибка при получении задачи: %v", err)
-		time.Sleep(5 * time.Second) // Подождать перед новой попыткой
+		time.Sleep(5 * time.Second)
 		return nil
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("Ошибка: статус ответа %s", resp.Status)
-		time.Sleep(20 * time.Second) // Подождать перед новой попыткой
+		time.Sleep(20 * time.Second)
 		return nil
 	}
 

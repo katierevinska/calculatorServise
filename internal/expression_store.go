@@ -96,9 +96,9 @@ type TaskStore struct {
 
 func NewTaskStore() *TaskStore {
 	return &TaskStore{
-		TasksResStore: *NewTaskResultStore(), // Инициализируем TaskResultStore
-		tasks:         []Task{},              // Инициализация пустого среза
-		Counter:       *NewCounter(),         // Инициализация Counter
+		TasksResStore: *NewTaskResultStore(),
+		tasks:         []Task{},
+		Counter:       *NewCounter(),
 	}
 }
 
@@ -156,7 +156,7 @@ type TaskResultStore struct {
 
 func NewTaskResultStore() *TaskResultStore {
 	return &TaskResultStore{
-		tasksRes: make(map[string]TaskResult), // Инициализация карты
+		tasksRes: make(map[string]TaskResult),
 	}
 }
 
