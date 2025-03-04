@@ -2,6 +2,7 @@ package rpn
 
 import (
 	"errors"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -9,7 +10,7 @@ import (
 	"github.com/katierevinska/calculatorService/internal"
 )
 
-func Calc(expression string) (string, error) {
+func Calc(expression string, taskStore *internal.TaskStore) (string, error) {
 	var nums []string
 	var ops []rune
 	var currNumStr strings.Builder
@@ -30,7 +31,7 @@ func Calc(expression string) (string, error) {
 					if len(nums) < 2 {
 						return "", errors.New("invalid expression: unmatched parentheses")
 					}
-					nums, ops, err = applyOperation(nums, ops)
+					nums, ops, err = applyOperation(nums, ops, taskStore)
 					if err != nil {
 						return "", errors.New("invalid expression")
 					}
@@ -44,7 +45,7 @@ func Calc(expression string) (string, error) {
 					if len(nums) < 2 {
 						return "", errors.New("invalid expression")
 					}
-					nums, ops, err = applyOperation(nums, ops)
+					nums, ops, err = applyOperation(nums, ops, taskStore)
 					if err != nil {
 						return "", errors.New("invalid expression")
 					}
@@ -67,7 +68,7 @@ func Calc(expression string) (string, error) {
 		if len(nums) < 2 && len(ops) > 0 {
 			return "", errors.New("incorrect")
 		}
-		nums, ops, err = applyOperation(nums, ops)
+		nums, ops, err = applyOperation(nums, ops, taskStore)
 		if err != nil {
 			return "", errors.New("invalid expression")
 		}
@@ -96,7 +97,7 @@ func precedence(op rune) int {
 	}
 	return 0
 }
-func applyOperation(nums []string, ops []rune) ([]string, []rune, error) {
+func applyOperation(nums []string, ops []rune, taskStore *internal.TaskStore) ([]string, []rune, error) {
 	if len(nums) < 2 || len(ops) == 0 {
 		return nums, ops, nil
 	}
@@ -117,6 +118,9 @@ func applyOperation(nums []string, ops []rune) ([]string, []rune, error) {
 		opTime = os.Getenv("TIME_SUBTRACTION_MS")
 	case '*':
 		opTime = os.Getenv("TIME_MULTIPLICATIONS_MS")
+		if opTime == "" {
+			log.Println("something really wrong")
+		}
 	case '/':
 		bNum, _ := strconv.ParseFloat(b, 64)
 		if 0.0 == bNum {
@@ -124,11 +128,10 @@ func applyOperation(nums []string, ops []rune) ([]string, []rune, error) {
 		}
 		opTime = os.Getenv("TIME_DIVISIONS_MS")
 	}
-	store := &internal.TaskStore{}
-	idResult := "id" + strconv.Itoa(int(store.GetCounter()))
+	idResult := "id" + strconv.Itoa(taskStore.Counter.GetValueAndInc())
 
 	task := internal.Task{Id: idResult, Arg1: a, Arg2: b, Operation: string(operator), Operation_time: opTime}
-
-	store.AddTask(task)
+	log.Println("want to add task " + task.Id + " " + task.Arg1 + " " + task.Arg2 + " " + task.Operation + " " + task.Operation_time)
+	taskStore.AddTask(task)
 	return append(nums, idResult), ops, nil
 }

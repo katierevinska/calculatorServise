@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"strconv"
 	"sync"
 )
 
@@ -29,10 +30,26 @@ type ExpressionStore struct {
 	mu          sync.Mutex
 }
 
+func NewExpressionStore() *ExpressionStore {
+	return &ExpressionStore{
+		expressions: make(map[string]Expression),
+	}
+}
+
 func (store *ExpressionStore) AddExpression(expr Expression) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	store.expressions[expr.ID] = expr
+}
+
+func (store *ExpressionStore) GetAllExpressions() []Expression {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	expressionsList := make([]Expression, 0, len(store.expressions))
+	for _, expr := range store.expressions {
+		expressionsList = append(expressionsList, expr)
+	}
+	return expressionsList
 }
 
 func (store *ExpressionStore) GetExpression(id string) (Expression, bool) {
@@ -52,17 +69,37 @@ func (store *ExpressionStore) ToJSON() (string, error) {
 	return string(jsonData), nil
 }
 
-type TaskStore struct {
-	tasks   []Task
-	counter int64
-	mu      sync.Mutex
+type Counter struct {
+	value int
+	mu    sync.RWMutex
 }
 
-func (ts *TaskStore) GetCounter() int64 {
-	ts.mu.Lock()
-	defer ts.mu.Unlock()
-	ts.counter += 1
-	return ts.counter
+func (c *Counter) GetValueAndInc() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	c.value++
+	return c.value
+}
+
+func NewCounter() *Counter {
+	return &Counter{
+		value: 0,
+	}
+}
+
+type TaskStore struct {
+	tasks         []Task
+	TasksResStore TaskResultStore
+	Counter       Counter
+	mu            sync.Mutex
+}
+
+func NewTaskStore() *TaskStore {
+	return &TaskStore{
+		TasksResStore: *NewTaskResultStore(), // Инициализируем TaskResultStore
+		tasks:         []Task{},              // Инициализация пустого среза
+		Counter:       *NewCounter(),         // Инициализация Counter
+	}
 }
 
 func (store *TaskStore) AddTask(t Task) {
@@ -76,13 +113,29 @@ func (store *TaskStore) GetTasks() []Task {
 	defer store.mu.Unlock()
 	return store.tasks
 }
-func (store *TaskStore) GetFirstTask() (Task, bool) {
+func (store *TaskStore) GetFirstCorrectTask() (Task, bool) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 	if len(store.tasks) == 0 {
 		return Task{}, false
 	}
 	task := store.tasks[0]
+	if value, exists := store.TasksResStore.GetTaskRes(task.Arg1); exists {
+		task.Arg1 = value.Result
+	} else {
+		_, err := strconv.ParseFloat(task.Arg1, 64)
+		if err != nil {
+			return Task{}, false
+		}
+	}
+	if value, exists := store.TasksResStore.GetTaskRes(task.Arg2); exists {
+		task.Arg2 = value.Result
+	} else {
+		_, err := strconv.ParseFloat(task.Arg2, 64)
+		if err != nil {
+			return Task{}, false
+		}
+	}
 	store.tasks = store.tasks[1:]
 	return task, true
 }
@@ -99,6 +152,12 @@ func (store *TaskStore) ToJSON() (string, error) {
 type TaskResultStore struct {
 	tasksRes map[string]TaskResult
 	mu       sync.Mutex
+}
+
+func NewTaskResultStore() *TaskResultStore {
+	return &TaskResultStore{
+		tasksRes: make(map[string]TaskResult), // Инициализация карты
+	}
 }
 
 func (store *TaskResultStore) AddTaskRes(t TaskResult) {

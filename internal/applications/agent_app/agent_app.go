@@ -30,6 +30,7 @@ func worker(id int, tasks <-chan internal.Task, results chan<- internal.TaskResu
 		opTime, _ := strconv.ParseInt(t.Operation_time, 10, 64)
 		time.Sleep(time.Duration(opTime))
 		resultValue := calculate(t)
+		log.Println("calculate a value of task and result is " + resultValue)
 		results <- internal.TaskResult{Id: t.Id, Result: resultValue}
 	}
 }
@@ -65,6 +66,7 @@ func (a *AgentApp) RunServer() {
 	}
 	go func() {
 		for result := range results {
+			log.Println("try to send to orchestrator " + result.Result)
 			sendResult(result)
 		}
 	}()
@@ -81,6 +83,7 @@ func (a *AgentApp) RunServer() {
 }
 
 func sendResult(result internal.TaskResult) {
+	log.Println("want to send to orchestrator " + result.Id + " " + result.Result)
 	jsonData, err := json.Marshal(result)
 	if err != nil {
 		log.Printf("Ошибка при маршализации результата: %v", err)

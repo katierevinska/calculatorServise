@@ -12,14 +12,12 @@ import (
 type OrchestratorApp struct {
 	expressionStore *internal.ExpressionStore
 	taskStore       *internal.TaskStore
-	taskResStore    *internal.TaskResultStore
 }
 
 func New() *OrchestratorApp {
 	return &OrchestratorApp{
-		expressionStore: &internal.ExpressionStore{},
-		taskStore:       &internal.TaskStore{},
-		taskResStore:    &internal.TaskResultStore{},
+		expressionStore: internal.NewExpressionStore(),
+		taskStore:       internal.NewTaskStore(),
 	}
 }
 
@@ -28,7 +26,7 @@ func (a *OrchestratorApp) RunServer() {
 	http.HandleFunc("/api/v1/expressions", a.GetExpressionsHandler)
 	http.HandleFunc("/api/v1/expressions/", a.GetExpressionByIdHandler)
 	http.HandleFunc("/internal/task/new", a.GetInternalTaskHandler)
-	http.HandleFunc("/internal/task", a.InternalTasResultHandler)
+	http.HandleFunc("/internal/task", a.InternalTaskResultHandler)
 	err := http.ListenAndServe(":8080", nil)
 	if err != nil {
 		log.Fatalf("Could not start server: %s\n", err)
@@ -46,9 +44,11 @@ type ErrorResponse struct {
 }
 
 func (app *OrchestratorApp) GetExpressionByIdHandler(w http.ResponseWriter, r *http.Request) {
+	log.Println(r.URL.Path)
 	idStr := r.URL.Path[len("/api/v1/expressions/"):]
 	expression, exists := app.expressionStore.GetExpression(idStr)
 	if !exists {
+		log.Println(idStr + "Expression not found")
 		http.Error(w, "Expression not found", http.StatusNotFound)
 		return
 	}
@@ -58,35 +58,51 @@ func (app *OrchestratorApp) GetExpressionByIdHandler(w http.ResponseWriter, r *h
 }
 
 func (app *OrchestratorApp) GetExpressionsHandler(w http.ResponseWriter, r *http.Request) {
-
+	exps := app.expressionStore.GetAllExpressions()
+	log.Printf(r.URL.Path+"send all expressions, in map there are %d", len(exps))
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(exps)
 }
 
-func (app *OrchestratorApp) InternalTasResultHandler(w http.ResponseWriter, r *http.Request) {
-	resultData := internal.TaskResult{}
+func (app *OrchestratorApp) InternalTaskResultHandler(w http.ResponseWriter, r *http.Request) {
+	var resultData internal.TaskResult
+
+	// Проверяем Content-Type
+	if r.Header.Get("Content-Type") != "application/json" {
+		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		return
+	}
 
 	if err := json.NewDecoder(r.Body).Decode(&resultData); err != nil {
 		http.Error(w, "Invalid input", http.StatusUnprocessableEntity)
 		return
 	}
-	app.taskResStore.AddTaskRes(resultData)
+
+	log.Printf("Получен результат задачи от агента: %s %s", resultData.Id, resultData.Result)
+	app.taskStore.TasksResStore.AddTaskRes(resultData)
+	w.WriteHeader(http.StatusOK) // Отправляем успешный ответ
+	exp, exist := app.expressionStore.GetExpression(resultData.Id)
+	if exist {
+		log.Printf("expression exist and resunt is set: %s %s", resultData.Id, resultData.Result)
+		exp.Result = resultData.Result
+		exp.Status = "calculated"
+		app.expressionStore.AddExpression(exp)
+	}
 }
 
 func (app *OrchestratorApp) GetInternalTaskHandler(w http.ResponseWriter, r *http.Request) {
 
-	task, exists := app.taskStore.GetFirstTask()
-
+	task, exists := app.taskStore.GetFirstCorrectTask()
 	if exists {
-		if value, exists := app.taskResStore.GetTaskRes(task.Arg1); exists {
-			task.Arg1 = value.Result
-		}
-		if value, exists := app.taskResStore.GetTaskRes(task.Arg2); exists {
-			task.Arg2 = value.Result
-		}
+		log.Println("agent ask for task and first is " + task.Id)
 
-		response := map[string]internal.Task{"task": task}
+		//response := map[string]internal.Task{"task": task}
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(response)
+		//json.NewEncoder(w).Encode(response)
+		json.NewEncoder(w).Encode(task)
+		return
 	}
+	log.Println("agent ask for task but no one need to be solved " + task.Id)
 	w.WriteHeader(http.StatusNotFound)
 }
 
@@ -98,7 +114,7 @@ func (app *OrchestratorApp) CalculatorHandler(w http.ResponseWriter, r *http.Req
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	resp, err := rpn.Calc(requestExrp.Expression)
+	resp, err := rpn.Calc(requestExrp.Expression, app.taskStore)
 	if err != nil {
 		errResp := ErrorResponse{Error: "Expression is not valid"}
 		w.WriteHeader(http.StatusUnprocessableEntity)
@@ -107,6 +123,7 @@ func (app *OrchestratorApp) CalculatorHandler(w http.ResponseWriter, r *http.Req
 	}
 	res := new(SuccessResponse)
 	res.Id = resp
+	app.expressionStore.AddExpression(internal.Expression{ID: resp, Status: "in progress", Result: ""})
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
