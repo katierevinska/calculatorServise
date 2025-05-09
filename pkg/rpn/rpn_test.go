@@ -5,50 +5,109 @@ import (
 	"testing"
 
 	"github.com/katierevinska/calculatorService/internal"
+	"github.com/katierevinska/calculatorService/internal/store"
 	"github.com/katierevinska/calculatorService/pkg/rpn"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
+func setupEnvForRPN() {
+	os.Setenv("TIME_ADDITION_MS", "10")
+	os.Setenv("TIME_SUBTRACTION_MS", "10")
+	os.Setenv("TIME_MULTIPLICATIONS_MS", "20")
+	os.Setenv("TIME_DIVISIONS_MS", "20")
+}
+
 func TestCalc_AddsTasksWithCorrectArguments(t *testing.T) {
-	os.Setenv("TIME_ADDITION_MS", "100")
-	os.Setenv("TIME_SUBTRACTION_MS", "100")
-	os.Setenv("TIME_MULTIPLICATIONS_MS", "100")
-	os.Setenv("TIME_DIVISIONS_MS", "100")
+	setupEnvForRPN()
 
 	tests := []struct {
-		expression string
-		expected   []internal.Task
+		name           string
+		expression     string
+		expectedTasks  []internal.Task
+		expectedLastID string
+		expectError    bool
 	}{
-		{"3+4", []internal.Task{
-			{Id: "id1", Arg1: "3", Arg2: "4", Operation: "+", Operation_time: "100"},
-		}},
-		{"10-2*2", []internal.Task{
-			{Id: "id1", Arg1: "2", Arg2: "2", Operation: "*", Operation_time: "100"},
-			{Id: "id2", Arg1: "10", Arg2: "id1", Operation: "-", Operation_time: "100"},
-		}},
-		{"8", []internal.Task{}},
-		{"2*(2.5+2)/4", []internal.Task{
-			{Id: "id1", Arg1: "2.5", Arg2: "2", Operation: "+", Operation_time: "100"},
-			{Id: "id2", Arg1: "2", Arg2: "id1", Operation: "*", Operation_time: "100"},
-			{Id: "id3", Arg1: "id2", Arg2: "4", Operation: "/", Operation_time: "100"},
-		}},
+		{
+			name:       "Simple addition",
+			expression: "3+4",
+			expectedTasks: []internal.Task{
+				{Id: "id1", Arg1: "3", Arg2: "4", Operation: "+", Operation_time: "10"},
+			},
+			expectedLastID: "id1",
+		},
+		{
+			name:       "Subtraction and multiplication with precedence",
+			expression: "10-2*2",
+			expectedTasks: []internal.Task{
+				{Id: "id1", Arg1: "2", Arg2: "2", Operation: "*", Operation_time: "20"},
+				{Id: "id2", Arg1: "10", Arg2: "id1", Operation: "-", Operation_time: "10"},
+			},
+			expectedLastID: "id2",
+		},
+		{
+			name:           "Single number",
+			expression:     "8",
+			expectedTasks:  []internal.Task{},
+			expectedLastID: "8",
+		},
+		{
+			name:       "Complex with parentheses",
+			expression: "2*(2.5+2)/4",
+			expectedTasks: []internal.Task{
+				{Id: "id1", Arg1: "2.5", Arg2: "2", Operation: "+", Operation_time: "10"},
+				{Id: "id2", Arg1: "2", Arg2: "id1", Operation: "*", Operation_time: "20"},
+				{Id: "id3", Arg1: "id2", Arg2: "4", Operation: "/", Operation_time: "20"},
+			},
+			expectedLastID: "id3",
+		},
+		{
+			name:        "Division by zero",
+			expression:  "1/0",
+			expectError: true,
+		},
+		{
+			name:        "Invalid expression - unmatched parenthesis",
+			expression:  "(2+3",
+			expectError: true,
+		},
+		{
+			name:        "Invalid expression - operator start",
+			expression:  "*2+3",
+			expectError: true,
+		},
+		{
+			name:        "Invalid expression - unknown symbol",
+			expression:  "2%3",
+			expectError: true,
+		},
 	}
 
 	for _, tt := range tests {
-		taskStore := internal.NewTaskStore()
-		taskStore.Counter = *internal.NewCounter()
-		_, err := rpn.Calc(tt.expression, taskStore)
-		if err != nil {
-			t.Errorf("Calc(%q) returned an error: %v", tt.expression, err)
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			taskStore := store.NewTaskStore()
 
-		if len(taskStore.GetTasks()) != len(tt.expected) {
-			t.Errorf("Expected %d tasks, got %d", len(tt.expected), len(taskStore.GetTasks()))
-		}
+			lastID, err := rpn.Calc(tt.expression, taskStore)
 
-		for i, task := range taskStore.GetTasks() {
-			if task.Id != tt.expected[i].Id || task.Arg1 != tt.expected[i].Arg1 || task.Arg2 != tt.expected[i].Arg2 || task.Operation != tt.expected[i].Operation || task.Operation_time != tt.expected[i].Operation_time {
-				t.Errorf("Task %d: expected %+v, got %+v", i, tt.expected[i], task)
+			if tt.expectError {
+				require.Error(t, err, "Calc(%q) should have returned an error", tt.expression)
+				return
 			}
-		}
+			require.NoError(t, err, "Calc(%q) returned an unexpected error: %v", tt.expression, err)
+
+			assert.Equal(t, tt.expectedLastID, lastID, "Unexpected last task ID")
+
+			actualTasks := taskStore.GetTasks()
+			require.Len(t, actualTasks, len(tt.expectedTasks), "Expected %d tasks, got %d", len(tt.expectedTasks), len(actualTasks))
+
+			for i, expectedTask := range tt.expectedTasks {
+				actualTask := actualTasks[i]
+				assert.Equal(t, expectedTask.Id, actualTask.Id, "Task %d: ID mismatch", i)
+				assert.Equal(t, expectedTask.Arg1, actualTask.Arg1, "Task %d: Arg1 mismatch", i)
+				assert.Equal(t, expectedTask.Arg2, actualTask.Arg2, "Task %d: Arg2 mismatch", i)
+				assert.Equal(t, expectedTask.Operation, actualTask.Operation, "Task %d: Operation mismatch", i)
+				assert.Equal(t, expectedTask.Operation_time, actualTask.Operation_time, "Task %d: Operation_time mismatch", i)
+			}
+		})
 	}
 }

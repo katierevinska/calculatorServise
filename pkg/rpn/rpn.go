@@ -8,9 +8,10 @@ import (
 	"strings"
 
 	"github.com/katierevinska/calculatorService/internal"
+	"github.com/katierevinska/calculatorService/internal/store"
 )
 
-func Calc(expression string, taskStore *internal.TaskStore) (string, error) {
+func Calc(expression string, taskStore *store.TaskStore) (string, error) {
 	var nums []string
 	var ops []rune
 	var currNumStr strings.Builder
@@ -97,7 +98,7 @@ func precedence(op rune) int {
 	}
 	return 0
 }
-func applyOperation(nums []string, ops []rune, taskStore *internal.TaskStore) ([]string, []rune, error) {
+func applyOperation(nums []string, ops []rune, taskStore *store.TaskStore) ([]string, []rune, error) {
 	if len(nums) < 2 || len(ops) == 0 {
 		return nums, ops, nil
 	}
